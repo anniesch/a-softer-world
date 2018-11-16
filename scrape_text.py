@@ -17,15 +17,6 @@ PANEL_DIMENSIONS = [(37, 256, 15, 228),
 					(37, 256, 492, 700)]
 NUM_PANELS = 3
 
-n = 0
-for index in tqdm(range(1, N_COMICS + 1)):
-	img_name = 'img_{:04d}.jpg'.format(index)
-	image = cv2.imread(os.path.join(comic_dir, img_name))
-	height, width, _ = image.shape
-	if abs(height - EXP_HEIGHT) > DIMENSION_THRESHOLD or abs(width - EXP_WIDTH) > DIMENSION_THRESHOLD: continue
-	n += 1
-print(n)
-
 for index in tqdm(range(11, 12)): #tqdm(range(1, N_COMICS + 1)):
 	# load image
 	img_name = 'img_{:04d}.jpg'.format(index)
@@ -75,4 +66,14 @@ class ComicText:
 	def get_aggregate_text(self):
 		return '\n'.join(self.text_per_panel)
 
-
+# how many comics with 3 panels?
+'''
+n = 0
+for index in tqdm(range(1, N_COMICS + 1)):
+	img_name = 'img_{:04d}.jpg'.format(index)
+	image = cv2.imread(os.path.join(comic_dir, img_name))
+	height, width, _ = image.shape
+	if abs(height - EXP_HEIGHT) > DIMENSION_THRESHOLD or abs(width - EXP_WIDTH) > DIMENSION_THRESHOLD: continue
+	n += 1
+print(n)
+'''
