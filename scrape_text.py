@@ -34,7 +34,7 @@ def get_text_boxes(img):
                 return True
         return False
 
-    def cluster_box(cluster, margin=0):
+    def cluster_box(cluster, img, margin=0):
         x1s, x2s, y1s, y2s = [], [], [], []
         for contour in cluster:
             x, y, w, h = cv2.boundingRect(contour)
@@ -42,12 +42,12 @@ def get_text_boxes(img):
             x2s.append(x + w)
             y1s.append(y)
             y2s.append(y + h)
-        new_x1, new_x2 = min(x1s), max(x2s)
-        new_y1, new_y2 = min(y1s), max(y2s)
+        new_x1 = max((min(x1s) - margin, 0))
+        new_x2 = min((max(x2s) + margin, img.shape[1]))
+        new_y1 = max((min(y1s) - margin, 0))
+        new_y2 = min((max(y2s) + margin, img.shape[0]))
         new_w, new_h = new_x2 - new_x1, new_y2 - new_y1
-        return (new_x1 - margin, new_y1 - margin,
-                new_w + 2 * margin, new_h + 2 * margin)
-
+        return (new_x1, new_y1, new_w, new_h)
 
     def is_white(img):
         lower, upper = np.array([0, 0, 200]), np.array([180, 255, 255])
@@ -80,11 +80,12 @@ def get_text_boxes(img):
 
     text_clusters = []
     for cluster in clusters:
-        x, y, w, h = cluster_box(cluster)
+        x, y, w, h = cluster_box(cluster, img)
         if is_white(img[y:y+h, x:x+w]) and w > 50:
             text_clusters.append(cluster)
 
-    text_boxes = [cluster_box(cluster, margin=5) for cluster in text_clusters]
+    text_boxes = [cluster_box(cluster, img, margin=5)
+                  for cluster in text_clusters]
     for text_box in text_boxes:
         x, y, w, h = text_box
         if x < 0: x = 0
@@ -125,8 +126,8 @@ for index in tqdm(range(7, 8)): #tqdm(range(1, N_COMICS + 1)):
 		# cv2.imshow("Image" + str(i), panels[i])
 		for text_box in text_boxes:
 		    x, y, w, h = text_box
-		    print(text_box)
-		    text = pytesseract.image_to_string(panel[y:y+h, x:x+w], config = '--psm 11')
+		    import pdb; pdb.set_trace() # print(text_box)
+		    text = pytesseract.image_to_string(panel[y:y+h, x:x+w], config = '--psm 7')
 		    print(text)
 		    cv2.imshow('Image' + str(i) + ': text', panel[y:y+h, x:x+w])
 		    cv2.waitKey(0)
