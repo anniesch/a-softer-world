@@ -56,12 +56,13 @@ def positioning(positions):
 	average_y = np.mean(all_y)
 	x_stddev = np.std(all_x)
 	y_stddev = np.std(all_y)
-	# print(average_x, average_y, x_stddev, y_stddev)
+	print(average_x, average_y, x_stddev, y_stddev)
 
 	# Make random distribution centered around averages, choose randomly
-	new_x = np.random.normal(average_x, x_stddev)
-	new_y = np.random.normal(average_y, y_stddev)
-	return (int(new_x), int(new_y))
+	new_x = np.random.normal(average_x, x_stddev / 5) ##actually y
+	new_y = np.random.normal(average_y - 140, y_stddev / 5) ##actually x
+
+	return (int(new_x), int(new_y)) ##goes y (col) then x (row)
 
 
 PANEL_COORDS = []
@@ -69,6 +70,7 @@ for i in range(3):
     new_position = positioning(list_positions)
     PANEL_COORDS.append(new_position)
 
+print("PANEL_COORDS", PANEL_COORDS)
 
 ################################################################
 # IMAGE GENERATION
@@ -81,8 +83,8 @@ def get_image():
 
 	random_filename = random.choice(list(image_dir.glob('*.jpg')))
 	image = Image.open(random_filename)
-	image.show()
-	print(random_filename)
+	#image.show()
+	#print(random_filename)
 	return random_filename
 
 
@@ -132,8 +134,10 @@ def add_text(comic_image):
         wrapped = textwrap.wrap(sentence, width=20)
         draw = ImageDraw.Draw(comic_image)
         font = ImageFont.truetype('loveletter.ttf', 13)
-        x = coords[0] + size[2]
-        y = coords[1] + size[0]
+        print("coords", coords)
+        y = coords[0] + size[0]
+        x = coords[1] + size[2]
+        print("XAND Y", x, y)
         for line in wrapped:
             width, height = font.getsize(line)
             draw.rectangle(((x, y), (x + width, y + height)), fill='white')
@@ -144,10 +148,10 @@ def add_text(comic_image):
 def generate_comic():
     comic_image = Image.open(template_path)
     panels = generate_panels()
-    print(PANEL_COORDS)
     for panel, coords in zip(panels, PANEL_DIMENSIONS):
         print("HELLO", panel, coords)
-        comic_image.paste(panel, coords)
+        coords_panels = coords[2], coords[0]
+        comic_image.paste(panel, coords_panels)
     add_text(comic_image)
     comic_image.show()
 
