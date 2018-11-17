@@ -4,11 +4,10 @@ import random
 import textwrap
 import math
 import numpy as np
-import markovify
+# import markovify
 from pathlib import Path
 
 import glob
-import markovify
 from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFont
@@ -16,49 +15,53 @@ from PIL import ImageFont
 import csv
 from io import StringIO
 
-##Positioning: in: positioning data from all the extraction
-##out: locations (3 positions, 1 for each panel) of words for asw comic
+# Positioning: in: positioning data from all the extraction
+# out: locations (3 positions, 1 for each panel) of words for asw comic
 
-##if the inputs are 
-#TEST = [(5, 5), (5, 5), (5, 5)]
-#PANEL_COORDS = [(13, 38), (254, 35), (491, 37)]
+# if the inputs are
+# TEST = [(5, 5), (5, 5), (5, 5)]
+# PANEL_COORDS = [(13, 38), (254, 35), (491, 37)]
 
 ################################################################
-##READ IN POSITIONS AND TEXT FROM OTHER FILES
-positions_dir = os.path.join('data', 'text_positions') # SUBJECT TO CHANGE
-text_dir = os.path.join('data', 'transcriptions') # SUBJECT TO CHANGE
-i = 700 # test
-csv_file = open(os.path.join(positions.csv), "r")
-csv_file_text = open(text.csv, "r")
+# READ IN POSITIONS AND TEXT FROM OTHER FILES
+positions_dir = os.path.join('data', 'text_positions')  # SUBJECT TO CHANGE
+text_dir = os.path.join('data', 'transcriptions')  # SUBJECT TO CHANGE
+index = 700  # test
+text_csv_name = 'text_{:04d}.csv'.format(index)
+location_csv_name = 'loc_{:04d}.csv'.format(index)
+csv_file = open(os.path.join(positions_dir, location_csv_name), "r")
+csv_file_text = open(os.path.join(text_dir, text_csv_name), "r")
 
 reader = csv.reader(csv_file)
-list_positions = list(reader)
+list_positions = [eval(i) for i in list(reader)[0]] # convert strings to tuples
 print(list_positions)
 
 reader = csv.reader(csv_file_text)
-new_text = list(reader)
+new_text = list(reader)[0]
 print(new_text)
 
 ################################################################
-##Positioning
+# Positioning
+
+
 def positioning(positions):
 	n = len(positions)
 	all_x = []
 	all_y = []
-	for x,y in positions:
+	for x, y in positions:
 		all_x.append(x)
 		all_y.append(y)
-	
+
 	average_x = np.mean(all_x)
 	average_y = np.mean(all_y)
 	x_stddev = np.std(all_x)
 	y_stddev = np.std(all_y)
-	#print(average_x, average_y, x_stddev, y_stddev)
+	# print(average_x, average_y, x_stddev, y_stddev)
 
-	##Make random distribution centered around averages, choose randomly
+	# Make random distribution centered around averages, choose randomly
 	new_x = np.random.normal(average_x, x_stddev)
 	new_y = np.random.normal(average_y, y_stddev)
-	return (new_x, new_y)
+	return (int(new_x), int(new_y))
 
 
 PANEL_COORDS = []
@@ -68,10 +71,11 @@ for i in range(3):
 
 
 ################################################################
-##IMAGE GENERATION
-##Background image: in: image dataset (images), tags
-##out: image for one asw comic (return image name). The directory is images.
+# IMAGE GENERATION
+# Background image: in: image dataset (images), tags
+# out: image for one asw comic (return image name). The directory is images.
 image_dir = Path(os.path.join('data', 'images'))
+
 
 def get_image():
 
@@ -81,11 +85,12 @@ def get_image():
 	print(random_filename)
 	return random_filename
 
+
 new_imagename = get_image()
 
 
 ################################################################
-####GENERATE NEW COMIC
+# GENERATE NEW COMIC
 comic_dir = os.path.join('data', 'comics')
 
 N_COMICS = 1248
@@ -111,7 +116,7 @@ def generate_panels():
     panels = []
     for size in PANEL_SIZES:
         x = random.randint(0, width - crop_size - 1)
-        y = random.randint(0, height- crop_size - 1)
+        y = random.randint(0, height - crop_size - 1)
         crop = back_image.crop((x, y, x + crop_size, y + crop_size))
         resized = crop.resize(size)
         panels.append(resized)
@@ -119,15 +124,16 @@ def generate_panels():
 
 
 def add_text(comic_image):
-	counter = 0
-    for coords, size in zip(PANEL_COORDS, PANEL_SIZES):
+    counter = 0
+    for coords, size in zip(PANEL_COORDS, PANEL_DIMENSIONS):
+        print("size", size)
         sentence = new_text[counter]
         counter += 1
         wrapped = textwrap.wrap(sentence, width=20)
         draw = ImageDraw.Draw(comic_image)
         font = ImageFont.truetype('loveletter.ttf', 13)
-        x = coords[0] + size[0]
-        y = coords[1] + size[1]
+        x = coords[0] + size[2]
+        y = coords[1] + size[0]
         for line in wrapped:
             width, height = font.getsize(line)
             draw.rectangle(((x, y), (x + width, y + height)), fill='white')
@@ -138,7 +144,9 @@ def add_text(comic_image):
 def generate_comic():
     comic_image = Image.open(template_path)
     panels = generate_panels()
-    for panel, coords in zip(panels, PANEL_COORDS):
+    print(PANEL_COORDS)
+    for panel, coords in zip(panels, PANEL_DIMENSIONS):
+        print("HELLO", panel, coords)
         comic_image.paste(panel, coords)
     add_text(comic_image)
     comic_image.show()
