@@ -159,7 +159,7 @@ for index in tqdm(range(1, N_COMICS + 1)): #tqdm(range(700, 710)):
         writer.writerow(row)
 
 class ComicText:
-    def __init__(text_per_panel=[], text_positions=[], npanels=3):
+    def __init__(self, text_per_panel=[], text_positions=[], npanels=3):
         self.text_per_panel = text_per_panel
         self.text_positions = text_positions
         self.npanels = npanels

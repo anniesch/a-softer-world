@@ -25,7 +25,10 @@ from io import StringIO
 
 ################################################################
 ##READ IN POSITIONS AND TEXT FROM OTHER FILES
-csv_file = open(positions.csv, "r")
+positions_dir = os.path.join('data', 'text_positions') # SUBJECT TO CHANGE
+text_dir = os.path.join('data', 'transcriptions') # SUBJECT TO CHANGE
+i = 700 # test
+csv_file = open(os.path.join(positions.csv), "r")
 csv_file_text = open(text.csv, "r")
 
 reader = csv.reader(csv_file)
