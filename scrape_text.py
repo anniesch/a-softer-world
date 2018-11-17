@@ -5,19 +5,26 @@ import cv2
 import os
 import numpy as np
 from tqdm import tqdm
+import csv
 
 comic_dir = os.path.join('data', 'comics')
+text_dir = os.path.join('data', 'transcriptions')
+loc_dir = os.path.join('data', 'text_positions')
 
 N_COMICS = 1248
 DIMENSION_THRESHOLD = 10
 EXP_HEIGHT = 265
 EXP_WIDTH = 720
-PANEL_DIMENSIONS = [(37, 256, 15, 228),
-					(37, 256, 248, 470),
-					(37, 256, 492, 700)]
+PANEL_DIMENSIONS_OLD = [(37, 256, 15, 228),
+                    (37, 256, 248, 470),
+                    (37, 256, 492, 700)] # for earlier comics
+PANEL_DIMENSIONS_NEW = [(20, 235, 15, 228),
+                    (20, 235, 248, 470),
+                    (20, 235, 492, 700)] # for later comics
+OLD_TO_NEW = 292
 NUM_PANELS = 3
 
-
+# inputs a comic panel and outputs rectangles where text boxes are thought to exist
 def get_text_boxes(img):
     def belongs_to(contour, cluster):
         cluster_y = []
@@ -58,7 +65,8 @@ def get_text_boxes(img):
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     lower, upper = np.array([0, 0, 0]), np.array([180, 255, 100])
     mask = cv2.inRange(hsv, lower, upper)
-    _, contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    _, contours, _ = cv2.findContours(
+        mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
     letter_contours_x = []
     for contour in contours:
@@ -92,59 +100,72 @@ def get_text_boxes(img):
         if y < 0: y = 0
     return text_boxes
 
-for index in tqdm(range(7, 8)): #tqdm(range(1, N_COMICS + 1)):
-	# load image
-	img_name = 'img_{:04d}.jpg'.format(index)
-	image = cv2.imread(os.path.join(comic_dir, img_name))
-	height, width, _ = image.shape
-	if abs(height - EXP_HEIGHT) > DIMENSION_THRESHOLD or abs(width - EXP_WIDTH) > DIMENSION_THRESHOLD: continue
 
-	# preprocess panels
-	# image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) #greyscale
-	# image = cv2.threshold(image, 0, 255,
-		# cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1] # thresholding
+for index in tqdm(range(1, N_COMICS + 1)): #tqdm(range(700, 710)):  
+    # load image; only analyze if there are 3 panels
+    img_name = 'img_{:04d}.jpg'.format(index)
+    image = cv2.imread(os.path.join(comic_dir, img_name))
+    height, width, _ = image.shape
+    if abs(height - EXP_HEIGHT) > DIMENSION_THRESHOLD or abs(width - EXP_WIDTH) > DIMENSION_THRESHOLD: continue
 
-	# Apply dilation and erosion to remove some noise
-	# kernel = np.ones((1, 1), np.uint8)
-	# image = cv2.dilate(image, kernel, iterations=1)
-	# image = cv2.erode(image, kernel, iterations=1)
-	# image = cv2.GaussianBlur(image, (5, 5), 0)
+    # split into 3 images
+    if index <= OLD_TO_NEW:
+        panel_dim = PANEL_DIMENSIONS_OLD
+    else: 
+        panel_dim = PANEL_DIMENSIONS_NEW
+    panels = [cv2.resize(image[panel_dim[i][0]:panel_dim[i][1], panel_dim[i][2]:panel_dim[i][3]],
+                   None, fx=1.5, fy=1.5, interpolation=cv2.INTER_CUBIC)
+            for i in range(NUM_PANELS)]
 
-	panels = [
-		cv2.resize(image[PANEL_DIMENSIONS[i][0]:PANEL_DIMENSIONS[i][1], PANEL_DIMENSIONS[i][2]:PANEL_DIMENSIONS[i][3]], 
-			None, fx=1.5, fy=1.5, interpolation=cv2.INTER_CUBIC)
-		for i in range(NUM_PANELS)
-		]
-	# image = cv2.resize(image, None, fx=1.5, fy=1.5, interpolation=cv2.INTER_CUBIC)
-	# split into 3 images
-	
-	# run OCR on each image
-	text_per_panel = []
-	for i in range(NUM_PANELS):
-		panel = panels[i]
-		text_boxes = get_text_boxes(panel)
-		# cv2.imshow("Image" + str(i), panels[i])
-		for text_box in text_boxes:
-		    x, y, w, h = text_box
-		    import pdb; pdb.set_trace() # print(text_box)
-		    text = pytesseract.image_to_string(panel[y:y+h, x:x+w], config = '--psm 7')
-		    print(text)
-		    cv2.imshow('Image' + str(i) + ': text', panel[y:y+h, x:x+w])
-		    cv2.waitKey(0)
-		    cv2.destroyAllWindows()
-		    text_per_panel.append(text)
-	 
-	# show the output images
-	cv2.waitKey(0)
+    # run OCR on each image
+    text_per_panel = []
+    textbox_locations = []
+    for i in range(NUM_PANELS):
+        panel = panels[i]
+        text_boxes = get_text_boxes(panel)
+        # cv2.imshow("Image" + str(i), panels[i])
+        panel_texts = []
+        text_boxes.sort(key=lambda x: x[1])
+        for text_box in text_boxes:
+            x, y, w, h = text_box
+            # import pdb; pdb.set_trace()
+            text = pytesseract.image_to_string(
+                panel[y:y+h, x:x+w], config='--psm 7')
+            text = text.strip()
+            
+            # for debugging:
+            # print(text)
+            # cv2.imshow('Image' + str(i) + ': text', panel[y:y+h, x:x+w])
+            # cv2.waitKey(0)
+            # cv2.destroyAllWindows()
+            
+            panel_texts.append(text)
+            textbox_locations.append((x, y))
+        panel_text = ' '.join(panel_texts)
+        text_per_panel.append(panel_text)
+    # print(text_per_panel)
+    # print(textbox_locations)
+    
+    # export results
+    text_csv_name = 'text_{:04d}.csv'.format(index)
+    location_csv_name = 'loc_{:04d}.csv'.format(index)
+    with open(os.path.join(text_dir, text_csv_name), mode='w') as text_csv:
+        writer = csv.writer(text_csv, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+        writer.writerow(text_per_panel)
+
+    with open(os.path.join(loc_dir, location_csv_name), mode='w') as loc_csv:
+        writer = csv.writer(loc_csv, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+        row = [str(i) for i in textbox_locations]
+        writer.writerow(row)
 
 class ComicText:
-	def __init__(text_per_panel=[], text_positions = [], npanels=3):
-		self.text_per_panel = text_per_panel
-		self.text_positions = text_positions
-		self.npanels = npanels
+    def __init__(text_per_panel=[], text_positions=[], npanels=3):
+        self.text_per_panel = text_per_panel
+        self.text_positions = text_positions
+        self.npanels = npanels
 
-	def get_text(self, panel_number):
-		return self.text_per_panel[panel_number - 1]
+    def get_text(self, panel_number):
+        return self.text_per_panel[panel_number - 1]
 
-	def get_aggregate_text(self):
-		return '\n'.join(self.text_per_panel)
+    def get_aggregate_text(self):
+        return '\n'.join(self.text_per_panel)
