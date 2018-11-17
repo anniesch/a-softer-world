@@ -57,8 +57,12 @@ def positioning(positions):
 	new_y = np.random.normal(average_y, y_stddev)
 	return (new_x, new_y)
 
-new_positions = positioning(list_positions)
-PANEL_COORDS = new_positions
+
+PANEL_COORDS = []
+for i in range(3):
+    new_position = positioning(list_positions)
+    PANEL_COORDS.append(new_position)
+
 
 ################################################################
 ##IMAGE GENERATION
@@ -119,8 +123,8 @@ def add_text(comic_image):
         wrapped = textwrap.wrap(sentence, width=20)
         draw = ImageDraw.Draw(comic_image)
         font = ImageFont.truetype('loveletter.ttf', 13)
-        x = coords[0]
-        y = coords[1]
+        x = coords[0] + size[0]
+        y = coords[1] + size[1]
         for line in wrapped:
             width, height = font.getsize(line)
             draw.rectangle(((x, y), (x + width, y + height)), fill='white')
@@ -129,7 +133,6 @@ def add_text(comic_image):
 
 
 def generate_comic():
-    #text_model = train_markov_chain()
     comic_image = Image.open(template_path)
     panels = generate_panels()
     for panel, coords in zip(panels, PANEL_COORDS):
