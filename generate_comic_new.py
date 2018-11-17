@@ -25,8 +25,8 @@ from io import StringIO
 ################################################################
 # READ IN POSITIONS AND TEXT FROM OTHER FILES
 positions_dir = os.path.join('data', 'text_positions')  # SUBJECT TO CHANGE
-text_dir = os.path.join('data', 'transcriptions')  # SUBJECT TO CHANGE
-index = 700  # test
+text_dir = os.path.join('data', 'generated')  # SUBJECT TO CHANGE
+index = 35 # test
 text_csv_name = 'text_{:04d}.csv'.format(index)
 location_csv_name = 'loc_{:04d}.csv'.format(index)
 csv_file = open(os.path.join(positions_dir, location_csv_name), "r")
