@@ -26,9 +26,10 @@ from io import StringIO
 # READ IN POSITIONS AND TEXT FROM OTHER FILES
 positions_dir = os.path.join('data', 'text_positions')  # SUBJECT TO CHANGE
 text_dir = os.path.join('data', 'generated')  # SUBJECT TO CHANGE
-index = 35 # test
-text_csv_name = 'text_{:04d}.csv'.format(index)
-location_csv_name = 'loc_{:04d}.csv'.format(index)
+text_index = 35 # test
+loc_index = 700
+text_csv_name = 'text_{:04d}.csv'.format(text_index)
+location_csv_name = 'loc_{:04d}.csv'.format(loc_index)
 csv_file = open(os.path.join(positions_dir, location_csv_name), "r")
 csv_file_text = open(os.path.join(text_dir, text_csv_name), "r")
 
@@ -59,8 +60,8 @@ def positioning(positions):
 	print(average_x, average_y, x_stddev, y_stddev)
 
 	# Make random distribution centered around averages, choose randomly
-	new_x = np.random.normal(average_x, x_stddev / 5) ##actually y
-	new_y = np.random.normal(average_y - 140, y_stddev / 5) ##actually x
+	new_x = np.random.normal(average_x, x_stddev / 5)
+	new_y = np.random.normal(average_y, y_stddev / 5)
 
 	return (int(new_x), int(new_y)) ##goes y (col) then x (row)
 
@@ -135,8 +136,8 @@ def add_text(comic_image):
         draw = ImageDraw.Draw(comic_image)
         font = ImageFont.truetype('loveletter.ttf', 13)
         print("coords", coords)
-        y = coords[0] + size[0]
-        x = coords[1] + size[2]
+        y = coords[1] + size[0]
+        x = coords[0] + size[2]
         print("XAND Y", x, y)
         for line in wrapped:
             width, height = font.getsize(line)
@@ -157,7 +158,5 @@ def generate_comic():
 
 
 generate_comic()
-
-
 
 

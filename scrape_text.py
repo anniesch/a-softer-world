@@ -101,7 +101,7 @@ def get_text_boxes(img):
     return text_boxes
 
 
-for index in tqdm(range(1, N_COMICS + 1)): #tqdm(range(700, 710)):  
+for index in tqdm(range(455, 456)): # tqdm(range(1, N_COMICS + 1)):
     # load image; only analyze if there are 3 panels
     img_name = 'img_{:04d}.jpg'.format(index)
     image = cv2.imread(os.path.join(comic_dir, img_name))
@@ -123,7 +123,7 @@ for index in tqdm(range(1, N_COMICS + 1)): #tqdm(range(700, 710)):
     for i in range(NUM_PANELS):
         panel = panels[i]
         text_boxes = get_text_boxes(panel)
-        # cv2.imshow("Image" + str(i), panels[i])
+        # cv2.imshow("Panel" + str(i), panels[i])
         panel_texts = []
         text_boxes.sort(key=lambda x: x[1])
         for text_box in text_boxes:
@@ -140,7 +140,7 @@ for index in tqdm(range(1, N_COMICS + 1)): #tqdm(range(700, 710)):
             # cv2.destroyAllWindows()
             
             panel_texts.append(text)
-            textbox_locations.append((x, y))
+            textbox_locations.append((x / 1.5, y / 1.5)) #recall that we scaled earlier
         panel_text = ' '.join(panel_texts)
         text_per_panel.append(panel_text)
     # print(text_per_panel)
