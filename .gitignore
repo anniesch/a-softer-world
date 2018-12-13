@@ -114,4 +114,7 @@ dmypy.json
 .pyre/
 
 # Custom to project
-data/comics
+base_model/data/comics
+image_cap_model/data/comics
+image_cap_model/data/panels
+tesseract/*checkpoint
