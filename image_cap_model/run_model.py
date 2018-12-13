@@ -1,6 +1,7 @@
 import csv
 import glob
 import os
+import cv2
 from nltk import word_tokenize
 from keras.layers import Dense
 from keras.layers import LSTM
@@ -11,17 +12,17 @@ NUM_PANELS = 3
 panel_path = os.path.join('data', 'panels')
 hand_path = os.path.join('data', 'hand_transcriptions')
 
-texts = []
 panel_paths = []
-
+full_texts = []
 for index in range(1, NUM_COMICS):
-    panel_images = [os.path.join(panel_path, 'panel_{:04d}_{}'.format(
+    panel_images = [os.path.join(panel_path, 'panel_{:04d}_{}.jpg'.format(
         index, panel_index)) for panel_index in range(NUM_PANELS)]
     text_csv = os.path.join(hand_path, 'text_{:04d}.csv'.format(index))
     try:
         with open(text_csv) as f:
             raw_texts = list(csv.reader(f))[0]
-            new_texts = [word_tokenize(text.lower()) for text in raw_texts]
+            new_texts = [['<s>'] + word_tokenize(text.lower()) + ['</s>'] 
+                         for text in raw_texts]
     except OSError:
         continue 
 
@@ -34,10 +35,26 @@ for index in range(1, NUM_COMICS):
     while len(panel_images) < len(new_texts):
         panel_images.append(panel_images[-1])
     panel_paths.extend(panel_images)
-    texts.extend(new_texts)
+    full_texts.extend(new_texts)
 
-words = sorted(list(set([word for text in texts for word in text])))
+words = sorted(list(set([word for text in full_texts for word in text])))
+word_to_index = {word: index for index, word in enumerate(words)}
+index_to_word = {word: index for index, word in enumerate(words)}
 
+context_texts = []
+next_words = []
+panels = []
+for full_text, panel_path in zip(full_texts, panel_paths):
+    for context_size in range(1, len(full_text)):
+        context_texts.append(full_text[:context_size])
+        next_words.append(full_text[context_size])
+        panels.append(panel_path)
+
+
+def generate_data():
+    while True:
+        for text, panel_path in texts, panel_paths:
+            pass
 
 
 image_input = Input(shape=...)
