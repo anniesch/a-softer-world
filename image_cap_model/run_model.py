@@ -8,12 +8,17 @@ from tqdm import tqdm
 from nltk import word_tokenize
 from keras.layers import Dense
 from keras.layers import LSTM
+from keras.layers import Input 
+from keras.layers import Flatten 
+from keras.layers import Bidirectional 
+from keras.models import Model
 from keras.preprocessing import image
-from keras.applications.vgg16 import preprocess_input
+from keras.applications.vgg16 import preprocess_input, VGG16
 
 NUM_COMICS = 1248
 NUM_PANELS = 3
 MAX_SENTENCE_LEN = 60
+BATCH_SIZE = 128
 
 panel_path = os.path.join('data', 'panels')
 hand_path = os.path.join('data', 'hand_transcriptions')
@@ -61,33 +66,46 @@ for full_text, panel in tqdm(zip(full_texts, all_panels), desc='preprocess',
 
 x_text = np.zeros((len(context_texts), MAX_SENTENCE_LEN, len(words)), 
                   dtype=np.bool)
-x_image_raw = np.zeros((len(panels), 3, 224, 224))
 y = np.zeros((len(context_texts), len(words)), dtype=np.bool)
 
-for index, data in tqdm(enumerate(zip(context_texts, next_words, panel)),
+for index, data in tqdm(enumerate(zip(context_texts, next_words)),
                         desc='vectorize', total=len(next_words)):
-    context, next_word, panel = data
+    context, next_word = data
     for word_index, word in enumerate(context):
         x_text[index, word_index, word_to_index[word]] = 1
     y[index, word_to_index[next_word]] = 1
-    x_image[index, :, :, :] = image.img_to_array(panel)
 
-x_image = preprocess_input(x_image_raw)
-import pdb; pdb.set_trace()
 
-image_input = Input(shape=(3, 224, 224))
+def data_generator():
+    while True:
+        for start_index in range(0, len(panels), BATCH_SIZE):
+            x_image_raw = np.zeros((BATCH_SIZE, 224, 224, 3))
+            for index in range(BATCH_SIZE):
+                try:
+                    x_image_raw[index, :, :, :] = image.img_to_array(
+                        panels[start_index + index])
+                except IndexError:
+                    break
+
+            batch_x_text = x_text[index:index+BATCH_SIZE]
+            batch_y = y[index:index+BATCH_SIZE]
+            batch_x_image = preprocess_input(x_image_raw)
+            yield ([batch_x_text, batch_x_image], batch_y)
+
+
+image_input = Input(shape=(224, 224, 3))
 text_input = Input(shape=(MAX_SENTENCE_LEN, len(words)))
-vgg = keras.applications.vgg16.VGG16(include_top=False, weights='imagenet',
+vgg = VGG16(include_top=False, weights='imagenet',
                                      input_tensor=image_input)
-vgg_dense = Dense(128)(vgg)
-lstm = Bidirectional(LSTM(128), input_shape=(maxlen, len(words)),
-                     initial_state=vgg_dense)(text_input)
+vgg_dense = Dense(128)(Flatten()(vgg.output))
+lstm = Bidirectional(LSTM(128), input_shape=(MAX_SENTENCE_LEN, 
+                                             len(words)))(text_input)
 predictions = Dense(len(words), activation='softmax')(lstm)
 model = Model(inputs=(text_input, image_input), outputs=predictions)
 model.compile(optimizer='adam',
               loss='categorical_crossentropy')
 
-model.fit(x, y, batch_size=128,
-          epochs=60,
-          callbacks=[print_callback])
+model.fit_generator(data_generator(), 
+                    steps_per_epoch=np.ceil(len(panels) / BATCH_SIZE),
+                    epochs=10)
 
