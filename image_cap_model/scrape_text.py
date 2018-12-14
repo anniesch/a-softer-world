@@ -1,4 +1,4 @@
-import pytesseract
+# import pytesseract
 import argparse
 import cv2
 import os
@@ -140,10 +140,11 @@ for index in tqdm(range(1, N_COMICS + 1)):
         text_boxes.sort(key=lambda x: x[1])
         for text_box in text_boxes:
             x, y, w, h = text_box
-            text = pytesseract.image_to_string(
-                panel[y:y+h, x:x+w], config='--psm 7',
-                lang='loveletter')
-            text = text.strip()
+            # text = pytesseract.image_to_string(
+            #     panel[y:y+h, x:x+w], config='--psm 7',
+            #     lang='loveletter')
+            # text = text.strip()
+            text = ''
             
             # for debugging:
             # print(text)

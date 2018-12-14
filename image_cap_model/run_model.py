@@ -2,7 +2,6 @@ import csv
 import glob
 import os
 
-import cv2
 import numpy as np
 from tqdm import tqdm
 from nltk import word_tokenize
@@ -17,6 +16,7 @@ from keras.layers import Concatenate
 from keras.models import Model
 from keras.preprocessing import image
 from keras.applications.vgg16 import preprocess_input, VGG16
+from sklearn.model_selection import train_test_split
 
 import keras.backend
 
@@ -58,7 +58,6 @@ words = sorted(list(set([word for text in full_texts for word in text])))
 word_to_index = {word: index for index, word in enumerate(words)}
 index_to_word = {word: index for index, word in enumerate(words)}
 
-
 context_texts = []
 next_words = []
 panels = []
@@ -80,20 +79,32 @@ for index, data in tqdm(enumerate(zip(context_texts, next_words)),
         x_text[index, word_index, word_to_index[word]] = 1
     y[index, word_to_index[next_word]] = 1
 
+# TODO: REMOVE
+x_text = x_text[:50]
+y = y[:50]
+panels = panels[:50]
 
-def data_generator():
+
+split_data = train_test_split(x_text, y, panels, test_size=0.2, random_state=42)
+x_test_train, x_test_val, y_train, y_val, panels_train, panels_val = split_data
+
+def data_generator(is_val=False):
+    gen_x_text = x_test_val if is_val else x_test_train
+    gen_y = y_val if is_val else y_train
+    gen_panels = panels_val if is_val else panels_train
     while True:
-        for start_index in range(0, len(panels), BATCH_SIZE):
-            x_image_raw = np.zeros((BATCH_SIZE, 224, 224, 3))
+        for start_index in range(0, len(gen_panels), BATCH_SIZE):
+            x_image_raw = np.zeros((min(BATCH_SIZE, 
+                len(gen_panels) - start_index), 224, 224, 3))
             for index in range(BATCH_SIZE):
                 try:
                     x_image_raw[index, :, :, :] = image.img_to_array(
-                        panels[start_index + index])
+                        gen_panels[start_index + index])
                 except IndexError:
                     break
 
-            batch_x_text = x_text[index:index+BATCH_SIZE]
-            batch_y = y[index:index+BATCH_SIZE]
+            batch_x_text = gen_x_text[start_index:start_index+BATCH_SIZE]
+            batch_y = gen_y[start_index:start_index+BATCH_SIZE]
             batch_x_image = preprocess_input(x_image_raw)
             yield ([batch_x_text, batch_x_image], batch_y)
 
@@ -103,19 +114,20 @@ vgg = VGG16(include_top=False, weights='imagenet',
             input_tensor=image_input)
 for layer in vgg.layers:
     layer.trainable = False
-vgg_dense = Dense(2)(Flatten()(vgg.output))
+vgg_dense = Dense(128)(Flatten()(vgg.output))
 vgg_embed = RepeatVector(1)(vgg_dense)
 
 text_input = Input(shape=(MAX_SENTENCE_LEN, len(words)))
-text_embed = TimeDistributed(Dense(2))(text_input)
+text_embed = TimeDistributed(Dense(128))(text_input)
 
 lstm_input = Concatenate(axis=1)([vgg_embed, text_embed])
-lstm = Bidirectional(LSTM(2), input_shape=(
+lstm = Bidirectional(LSTM(128), input_shape=(
     MAX_SENTENCE_LEN, len(words)))(lstm_input)
 predictions = Dense(len(words), activation='softmax')(lstm)
 model = Model(inputs=(text_input, image_input), outputs=predictions)
 model.compile(optimizer='adam', loss='categorical_crossentropy')
 model.fit_generator(data_generator(), 
-                    steps_per_epoch=np.ceil(len(panels) / BATCH_SIZE),
-                    epochs=10)
-
+                    steps_per_epoch=np.ceil(len(panels_train) / BATCH_SIZE),
+                    epochs=10,
+                    validation_data=data_generator(is_val=True),
+                    validation_steps=np.ceil(len(panels_val) / BATCH_SIZE))
