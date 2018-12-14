@@ -16,6 +16,7 @@ from keras.layers import Concatenate
 from keras.models import Model
 from keras.preprocessing import image
 from keras.applications.vgg16 import preprocess_input, VGG16
+from keras.callbacks import ModelCheckpoint, EarlyStopping, TensorBoard
 from sklearn.model_selection import train_test_split
 
 import keras.backend
@@ -23,7 +24,7 @@ import keras.backend
 NUM_COMICS = 1248
 NUM_PANELS = 3
 MAX_SENTENCE_LEN = 60
-BATCH_SIZE = 16
+BATCH_SIZE = 256
 
 panel_path = os.path.join('data', 'panels')
 hand_path = os.path.join('data', 'hand_transcriptions')
@@ -79,11 +80,11 @@ for index, data in tqdm(enumerate(zip(context_texts, next_words)),
         x_text[index, word_index, word_to_index[word]] = 1
     y[index, word_to_index[next_word]] = 1
 
-# TODO: REMOVE
+
+# TODO: remove!!
 x_text = x_text[:50]
 y = y[:50]
 panels = panels[:50]
-
 
 split_data = train_test_split(x_text, y, panels, test_size=0.2, random_state=42)
 x_test_train, x_test_val, y_train, y_val, panels_train, panels_val = split_data
@@ -124,10 +125,16 @@ lstm_input = Concatenate(axis=1)([vgg_embed, text_embed])
 lstm = Bidirectional(LSTM(128), input_shape=(
     MAX_SENTENCE_LEN, len(words)))(lstm_input)
 predictions = Dense(len(words), activation='softmax')(lstm)
+
+checkpoint = ModelCheckpoint('weights.{epoch:02d}-{val_loss:.2f}.hdf5')
+earlystop = EarlyStopping()
+tensorboard = TensorBoard(batch_size=BATCH_SIZE)
+
 model = Model(inputs=(text_input, image_input), outputs=predictions)
 model.compile(optimizer='adam', loss='categorical_crossentropy')
 model.fit_generator(data_generator(), 
                     steps_per_epoch=np.ceil(len(panels_train) / BATCH_SIZE),
-                    epochs=10,
+                    epochs=5,
                     validation_data=data_generator(is_val=True),
-                    validation_steps=np.ceil(len(panels_val) / BATCH_SIZE))
+                    validation_steps=np.ceil(len(panels_val) / BATCH_SIZE),
+                    callbacks=[checkpoint, earlystop, tensorboard])
