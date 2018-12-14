@@ -26,7 +26,7 @@ from io import StringIO
 # READ IN POSITIONS AND TEXT FROM OTHER FILES
 positions_dir = os.path.join('data', 'text_positions')  # SUBJECT TO CHANGE
 text_dir = os.path.join('data', 'generated')  # SUBJECT TO CHANGE
-text_index = 35 # test
+text_index = 48 # test
 loc_index = 700
 text_csv_name = 'text_{:04d}.csv'.format(text_index)
 location_csv_name = 'loc_{:04d}.csv'.format(loc_index)
@@ -40,6 +40,14 @@ print(list_positions)
 reader = csv.reader(csv_file_text)
 new_text = list(reader)[0]
 print(new_text)
+
+
+
+
+
+
+
+
 
 ################################################################
 # Positioning
@@ -60,8 +68,8 @@ def positioning(positions):
 	print(average_x, average_y, x_stddev, y_stddev)
 
 	# Make random distribution centered around averages, choose randomly
-	new_x = np.random.normal(average_x, x_stddev / 5)
-	new_y = np.random.normal(average_y, y_stddev / 5)
+	new_x = np.random.normal(average_x - 40, x_stddev / 4)
+	new_y = np.random.normal(average_y, y_stddev / 4)
 
 	return (int(new_x), int(new_y)) ##goes y (col) then x (row)
 
