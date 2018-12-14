@@ -1,5 +1,6 @@
 import csv
 import glob
+import random
 import os
 
 import numpy as np
@@ -57,7 +58,7 @@ for index in tqdm(range(1, NUM_COMICS), desc='raw data'):
 
 words = sorted(list(set([word for text in full_texts for word in text])))
 word_to_index = {word: index for index, word in enumerate(words)}
-index_to_word = {word: index for index, word in enumerate(words)}
+index_to_word = {index: word for index, word in enumerate(words)}
 
 context_texts = []
 next_words = []
@@ -89,6 +90,7 @@ panels = panels[:50]
 split_data = train_test_split(x_text, y, panels, test_size=0.2, random_state=42)
 x_test_train, x_test_val, y_train, y_val, panels_train, panels_val = split_data
 
+
 def data_generator(is_val=False):
     gen_x_text = x_test_val if is_val else x_test_train
     gen_y = y_val if is_val else y_train
@@ -108,6 +110,26 @@ def data_generator(is_val=False):
             batch_y = gen_y[start_index:start_index+BATCH_SIZE]
             batch_x_image = preprocess_input(x_image_raw)
             yield ([batch_x_text, batch_x_image], batch_y)
+
+
+def generate_text(model, input_image, temperature=1.0, beam_size=10):
+    top_paths = [[] for _ in range(beam_size)]
+    top_scores = [1.0 for _ in range(beam_size)]
+    img_array = image.img_to_array(input_image)[np.newaxis, ...]
+    x_text = np.zeros((1, MAX_SENTENCE_LEN, len(words)), 
+                      dtype=np.bool)
+    x_text[0, 0, word_to_index['<s>']] = 1
+
+    preds = model.predict([x_text, img_array])[0]
+    temp_preds = np.exp(np.log(preds) / temperature)
+    top_adds = np.argsort(temp_preds)[-beam_size:]
+
+    import pdb; pdb.set_trace()
+
+    for top_add in top_adds:
+        print(index_to_word[top_add])
+
+    import pdb; pdb.set_trace()
 
 
 image_input = Input(shape=(224, 224, 3))
@@ -134,7 +156,9 @@ model = Model(inputs=(text_input, image_input), outputs=predictions)
 model.compile(optimizer='adam', loss='categorical_crossentropy')
 model.fit_generator(data_generator(), 
                     steps_per_epoch=np.ceil(len(panels_train) / BATCH_SIZE),
-                    epochs=5,
+                    epochs=2,
                     validation_data=data_generator(is_val=True),
                     validation_steps=np.ceil(len(panels_val) / BATCH_SIZE),
                     callbacks=[checkpoint, earlystop, tensorboard])
+
+print(generate_text(model, random.choice(panels)))
