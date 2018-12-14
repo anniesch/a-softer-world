@@ -11,14 +11,19 @@ from keras.layers import LSTM
 from keras.layers import Input 
 from keras.layers import Flatten 
 from keras.layers import Bidirectional 
+from keras.layers import RepeatVector
+from keras.layers import TimeDistributed 
+from keras.layers import Concatenate 
 from keras.models import Model
 from keras.preprocessing import image
 from keras.applications.vgg16 import preprocess_input, VGG16
 
+import keras.backend
+
 NUM_COMICS = 1248
 NUM_PANELS = 3
 MAX_SENTENCE_LEN = 60
-BATCH_SIZE = 128
+BATCH_SIZE = 16
 
 panel_path = os.path.join('data', 'panels')
 hand_path = os.path.join('data', 'hand_transcriptions')
@@ -94,17 +99,22 @@ def data_generator():
 
 
 image_input = Input(shape=(224, 224, 3))
-text_input = Input(shape=(MAX_SENTENCE_LEN, len(words)))
 vgg = VGG16(include_top=False, weights='imagenet',
-                                     input_tensor=image_input)
-vgg_dense = Dense(128)(Flatten()(vgg.output))
-lstm = Bidirectional(LSTM(128), input_shape=(MAX_SENTENCE_LEN, 
-                                             len(words)))(text_input)
+            input_tensor=image_input)
+for layer in vgg.layers:
+    layer.trainable = False
+vgg_dense = Dense(2)(Flatten()(vgg.output))
+vgg_embed = RepeatVector(1)(vgg_dense)
+
+text_input = Input(shape=(MAX_SENTENCE_LEN, len(words)))
+text_embed = TimeDistributed(Dense(2))(text_input)
+
+lstm_input = Concatenate(axis=1)([vgg_embed, text_embed])
+lstm = Bidirectional(LSTM(2), input_shape=(
+    MAX_SENTENCE_LEN, len(words)))(lstm_input)
 predictions = Dense(len(words), activation='softmax')(lstm)
 model = Model(inputs=(text_input, image_input), outputs=predictions)
-model.compile(optimizer='adam',
-              loss='categorical_crossentropy')
-
+model.compile(optimizer='adam', loss='categorical_crossentropy')
 model.fit_generator(data_generator(), 
                     steps_per_epoch=np.ceil(len(panels) / BATCH_SIZE),
                     epochs=10)
