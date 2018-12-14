@@ -8,6 +8,8 @@ from tqdm import tqdm
 from nltk import word_tokenize
 from keras.layers import Dense
 from keras.layers import LSTM
+from keras.preprocessing import image
+from keras.applications.vgg16 import preprocess_input
 
 NUM_COMICS = 1248
 NUM_PANELS = 3
@@ -39,7 +41,7 @@ for index in tqdm(range(1, NUM_COMICS), desc='raw data'):
     while len(panel_images) < len(new_texts):
         panel_images.append(panel_images[-1])
     for panel_image in panel_images:
-        all_panels.append(cv2.imread(panel_image))
+        all_panels.append(image.load_img(panel_image, target_size=(224,224)))
     full_texts.extend(new_texts)
 
 words = sorted(list(set([word for text in full_texts for word in text])))
@@ -59,20 +61,22 @@ for full_text, panel in tqdm(zip(full_texts, all_panels), desc='preprocess',
 
 x_text = np.zeros((len(context_texts), MAX_SENTENCE_LEN, len(words)), 
                   dtype=np.bool)
-# x_image = np.stack(panels)
+x_image_raw = np.zeros((len(panels), 3, 224, 224))
 y = np.zeros((len(context_texts), len(words)), dtype=np.bool)
 
-for index, (context, next_word) in tqdm(enumerate(zip(
-        context_texts, next_words)), desc='vectorize', total=len(next_words)):
+for index, data in tqdm(enumerate(zip(context_texts, next_words, panel)),
+                        desc='vectorize', total=len(next_words)):
+    context, next_word, panel = data
     for word_index, word in enumerate(context):
         x_text[index, word_index, word_to_index[word]] = 1
     y[index, word_to_index[next_word]] = 1
+    x_image[index, :, :, :] = image.img_to_array(panel)
 
+x_image = preprocess_input(x_image_raw)
 import pdb; pdb.set_trace()
 
-
-image_input = Input(shape=...)
-text_input = Input(shape=(len(words),))
+image_input = Input(shape=(3, 224, 224))
+text_input = Input(shape=(MAX_SENTENCE_LEN, len(words)))
 vgg = keras.applications.vgg16.VGG16(include_top=False, weights='imagenet',
                                      input_tensor=image_input)
 vgg_dense = Dense(128)(vgg)
