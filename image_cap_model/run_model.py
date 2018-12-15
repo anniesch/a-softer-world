@@ -26,7 +26,7 @@ import keras.backend
 
 NUM_COMICS = 1248
 NUM_PANELS = 3
-MAX_SENTENCE_LEN = 60
+MAX_SENTENCE_LEN = 20
 BATCH_SIZE = 1
 
 panel_path = os.path.join('data', 'panels')
@@ -79,6 +79,8 @@ y = np.zeros((len(context_texts), len(words)), dtype=np.bool)
 for index, data in tqdm(enumerate(zip(context_texts, next_words)),
                         desc='vectorize', total=len(next_words)):
     context, next_word = data
+    if len(context) > MAX_SENTENCE_LEN:
+        continue
     for word_index, word in enumerate(context):
         x_text[index, word_index, word_to_index[word]] = 1
     y[index, word_to_index[next_word]] = 1
@@ -159,34 +161,35 @@ def generate_text(model, input_image, temperature=1.0, beam_size=10, max_len=20)
     return ' '.join(index_to_word[index] for index in path)
  
 
-image_input = Input(shape=(224, 224, 3))
-vgg = VGG16(include_top=False, weights='imagenet',
-            input_tensor=image_input)
-for layer in vgg.layers:
-    layer.trainable = False
-vgg_dense = Dense(256)(Flatten()(vgg.output))
-vgg_embed = RepeatVector(1)(vgg_dense)
+# image_input = Input(shape=(224, 224, 3))
+# vgg = VGG16(include_top=False, weights='imagenet',
+#             input_tensor=image_input)
+# for layer in vgg.layers:
+#     layer.trainable = False
+# vgg_dense = Dense(256)(Flatten()(vgg.output))
+# vgg_embed = RepeatVector(1)(vgg_dense)
 
 text_input = Input(shape=(MAX_SENTENCE_LEN, len(words)))
 text_embed = TimeDistributed(Dense(256))(text_input)
-lstm_input = Concatenate(axis=1)([vgg_embed, text_embed])
-lstm = Bidirectional(LSTM(128), input_shape=(
-    MAX_SENTENCE_LEN + 1, 256))(lstm_input)
-lstm = LSTM(128, input_shape=(MAX_SENTENCE_LEN, len(words)))(text_input)
-predictions = Dense(len(words), activation='softmax')(lstm)
+# lstm_input = Concatenate(axis=1)([vgg_embed, text_embed])
+# lstm = Bidirectional(LSTM(128), input_shape=(
+#     MAX_SENTENCE_LEN + 1, 256))(BatchNormalization()(lstm_input))
+lstm = Bidirectional(LSTM(128), input_shape=(MAX_SENTENCE_LEN, 256))(text_embed)
+batchnorm = BatchNormalization()(lstm)
+predictions = Dense(len(words), activation='softmax')(batchnorm)
 
-checkpoint = ModelCheckpoint('weights.{epoch:02d}-{val_loss:.2f}.hdf5')
-earlystop = EarlyStopping()
-tensorboard = TensorBoard(batch_size=BATCH_SIZE)
-optimizer = Adam()
-model = Model(inputs=(text_input, image_input), outputs=predictions)
-model.compile(optimizer=optimizer, loss='categorical_crossentropy')
+# checkpoint = ModelCheckpoint('weights.{epoch:02d}-{val_loss:.2f}.hdf5')
+# earlystop = EarlyStopping()
+# tensorboard = TensorBoard(batch_size=BATCH_SIZE)
+# optimizer = Adam(lr=0.002)
+# model = Model(inputs=(text_input, image_input), outputs=predictions)
+model = Model(inputs=text_input, outputs=predictions)
+# model.compile(optimizer=optimizer, loss='categorical_crossentropy')
 
-
-model = Sequential()
-model.add(LSTM(128, input_shape=(MAX_SENTENCE_LEN, len(words))))
-model.add(BatchNormalization())
-model.add(Dense(len(words), activation='softmax'))
+# model = Sequential()
+# model.add(LSTM(128, input_shape=(MAX_SENTENCE_LEN, len(words))))
+# model.add(BatchNormalization())
+# model.add(Dense(len(words), activation='softmax'))
 
 optimizer = Adam(lr=0.001)
 model.compile(loss='categorical_crossentropy', optimizer=optimizer)
@@ -195,11 +198,12 @@ model.fit(x_text, y,
           batch_size=64,
           epochs=500)
 
+
 # model.fit_generator(data_generator(), 
 #                     steps_per_epoch=np.ceil(len(panels_train) / BATCH_SIZE),
 #                     # validation_data=data_generator(is_val=True),
 #                     # validation_steps=np.ceil(len(panels_val) / BATCH_SIZE)
-#                     epochs=20)
+#                     epochs=500)
 
 
 dg = data_generator()
