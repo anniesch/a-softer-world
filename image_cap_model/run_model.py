@@ -14,10 +14,12 @@ from keras.layers import Bidirectional
 from keras.layers import RepeatVector
 from keras.layers import TimeDistributed 
 from keras.layers import Concatenate 
-from keras.models import Model
+from keras.layers import BatchNormalization
+from keras.models import Model, Sequential
 from keras.preprocessing import image
 from keras.applications.vgg16 import preprocess_input, VGG16
 from keras.callbacks import ModelCheckpoint, EarlyStopping, TensorBoard
+from keras.optimizers import Adam, RMSprop
 from sklearn.model_selection import train_test_split
 
 import keras.backend
@@ -25,7 +27,7 @@ import keras.backend
 NUM_COMICS = 1248
 NUM_PANELS = 3
 MAX_SENTENCE_LEN = 60
-BATCH_SIZE = 256
+BATCH_SIZE = 1
 
 panel_path = os.path.join('data', 'panels')
 hand_path = os.path.join('data', 'hand_transcriptions')
@@ -83,16 +85,21 @@ for index, data in tqdm(enumerate(zip(context_texts, next_words)),
 
 
 # TODO: remove!!
-x_text = x_text[:50]
-y = y[:50]
-panels = panels[:50]
+x_text = x_text[:2]
+y = y[:2]
+panels = panels[:2]
+print(context_texts[:2])
+print(next_words[:2])
 
-split_data = train_test_split(x_text, y, panels, test_size=0.2, random_state=42)
-x_test_train, x_test_val, y_train, y_val, panels_train, panels_val = split_data
+# split_data = train_test_split(x_text, y, panels, test_size=0.2, random_state=42)
+# x_test_train, x_test_val, y_train, y_val, panels_train, panels_val = split_data
+x_text_train = x_text
+y_train = y
+panels_train = panels
 
 
 def data_generator(is_val=False):
-    gen_x_text = x_test_val if is_val else x_test_train
+    gen_x_text = x_test_val if is_val else x_text_train
     gen_y = y_val if is_val else y_train
     gen_panels = panels_val if is_val else panels_train
     while True:
@@ -112,53 +119,95 @@ def data_generator(is_val=False):
             yield ([batch_x_text, batch_x_image], batch_y)
 
 
-def generate_text(model, input_image, temperature=1.0, beam_size=10):
-    top_paths = [[] for _ in range(beam_size)]
-    top_scores = [1.0 for _ in range(beam_size)]
+def generate_text_beam(model, input_image, beam_size=10, max_len=20):
     img_array = image.img_to_array(input_image)[np.newaxis, ...]
-    x_text = np.zeros((1, MAX_SENTENCE_LEN, len(words)), 
-                      dtype=np.bool)
-    x_text[0, 0, word_to_index['<s>']] = 1
+    paths, log_probs = [[word_to_index['<s>']]], [[]]
+    for _ in range(max_len):
+        new_paths = []
+        new_probs = []
+        for path, prob_list in zip(paths, log_probs):
+            x_text = np.zeros((1, MAX_SENTENCE_LEN, len(words)),
+                              dtype=np.bool)
+            for word_index, word in enumerate(path):
+                x_text[0, word_index, word] = 1
+            preds = model.predict([x_text, img_array])[0]
+            log_temp_preds = np.log(preds)
 
-    preds = model.predict([x_text, img_array])[0]
-    temp_preds = np.exp(np.log(preds) / temperature)
-    top_adds = np.argsort(temp_preds)[-beam_size:]
+            for index in range(len(words)):
+                new_paths.append(path + [index])
+                new_probs.append(prob_list + [log_temp_preds[index]])
 
-    import pdb; pdb.set_trace()
+        total_probs = [sum(new_prob_list) for new_prob_list in new_probs]
+        best_indices = np.argsort(total_probs)[-beam_size:]
+        paths = [new_paths[index] for index in best_indices]
+        log_probs = [new_probs[index] for index in best_indices]
 
-    for top_add in top_adds:
-        print(index_to_word[top_add])
 
-    import pdb; pdb.set_trace()
-
+def generate_text(model, input_image, temperature=1.0, beam_size=10, max_len=20):
+    img_array = image.img_to_array(input_image)[np.newaxis, ...]
+    path = [word_to_index['<s>']]
+    while len(path) < max_len and path[-1] != word_to_index['</s>']:
+        x_text = np.zeros((1, MAX_SENTENCE_LEN, len(words)),
+                          dtype=np.bool)
+        for word_index, word in enumerate(path):
+            x_text[0, word_index, word] = 1
+        preds = model.predict([x_text, img_array])[0]
+        temp_preds = np.exp(np.log(preds) / temperature).astype('float64')
+        temp_preds /= np.sum(temp_preds)
+        next_word = np.argmax(np.random.multinomial(1, temp_preds, 1)[0])
+        path.append(next_word)
+    return ' '.join(index_to_word[index] for index in path)
+ 
 
 image_input = Input(shape=(224, 224, 3))
 vgg = VGG16(include_top=False, weights='imagenet',
             input_tensor=image_input)
 for layer in vgg.layers:
     layer.trainable = False
-vgg_dense = Dense(128)(Flatten()(vgg.output))
+vgg_dense = Dense(256)(Flatten()(vgg.output))
 vgg_embed = RepeatVector(1)(vgg_dense)
 
 text_input = Input(shape=(MAX_SENTENCE_LEN, len(words)))
-text_embed = TimeDistributed(Dense(128))(text_input)
-
+text_embed = TimeDistributed(Dense(256))(text_input)
 lstm_input = Concatenate(axis=1)([vgg_embed, text_embed])
 lstm = Bidirectional(LSTM(128), input_shape=(
-    MAX_SENTENCE_LEN, len(words)))(lstm_input)
+    MAX_SENTENCE_LEN + 1, 256))(lstm_input)
+lstm = LSTM(128, input_shape=(MAX_SENTENCE_LEN, len(words)))(text_input)
 predictions = Dense(len(words), activation='softmax')(lstm)
 
 checkpoint = ModelCheckpoint('weights.{epoch:02d}-{val_loss:.2f}.hdf5')
 earlystop = EarlyStopping()
 tensorboard = TensorBoard(batch_size=BATCH_SIZE)
-
+optimizer = Adam()
 model = Model(inputs=(text_input, image_input), outputs=predictions)
-model.compile(optimizer='adam', loss='categorical_crossentropy')
-model.fit_generator(data_generator(), 
-                    steps_per_epoch=np.ceil(len(panels_train) / BATCH_SIZE),
-                    epochs=2,
-                    validation_data=data_generator(is_val=True),
-                    validation_steps=np.ceil(len(panels_val) / BATCH_SIZE),
-                    callbacks=[checkpoint, earlystop, tensorboard])
+model.compile(optimizer=optimizer, loss='categorical_crossentropy')
 
-print(generate_text(model, random.choice(panels)))
+
+model = Sequential()
+model.add(LSTM(128, input_shape=(MAX_SENTENCE_LEN, len(words))))
+model.add(BatchNormalization())
+model.add(Dense(len(words), activation='softmax'))
+
+optimizer = Adam(lr=0.001)
+model.compile(loss='categorical_crossentropy', optimizer=optimizer)
+
+model.fit(x_text, y,
+          batch_size=64,
+          epochs=500)
+
+# model.fit_generator(data_generator(), 
+#                     steps_per_epoch=np.ceil(len(panels_train) / BATCH_SIZE),
+#                     # validation_data=data_generator(is_val=True),
+#                     # validation_steps=np.ceil(len(panels_val) / BATCH_SIZE)
+#                     epochs=20)
+
+
+dg = data_generator()
+x1, _ = next(dg)
+y1 = model.predict(x1)
+x2, _ = next(dg)
+y2 = model.predict(x2)
+import pdb; pdb.set_trace() 
+
+for _ in range(10):
+    print(generate_text(model, random.choice(panels), temperature=0.4))
